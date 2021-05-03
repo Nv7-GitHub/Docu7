@@ -6,43 +6,76 @@ import (
 	"image"
 	"os"
 
-	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
+	r "github.com/Lachee/raylib-goplus/raylib"
 )
 
-var win fyne.Window
+const fps = 60
+
+var (
+	width   = 0
+	height  = 0
+	isHidpi = true
+
+	div float32 = 1
+)
 
 func handle(err error) {
 	if err != nil {
-		dialog.ShowError(err, win)
 		panic(err)
 	}
 }
 
-func main() {
-	app := app.New()
-	win = app.NewWindow("Docu7")
+func windowResize() {
+	width, height = r.GetScreenWidth(), r.GetScreenHeight()
+	if isHidpi {
+		pos := r.GetWindowPosition()
+		r.SetWindowPosition(int(pos.X+1), int(pos.Y+1))
+		r.SetWindowPosition(int(pos.X), int(pos.Y))
+	}
+}
 
+func main() {
 	// Load file from file dialog instead
 	file, err := os.Open("input.png")
 	handle(err)
 	img, _, err := image.Decode(file)
 	handle(err)
+	imw, imh := float32(img.Bounds().Dx()), float32(img.Bounds().Dy())
 
-	image := canvas.NewImageFromImage(img)
-	image.FillMode = canvas.ImageFillContain
+	// Raylib
+	r.SetConfigFlags(r.FlagWindowResizable | r.FlagVsyncHint)
 
-	circle := canvas.NewCircle(color.RGBA{R: 255, G: 0, B: 0, A: 255})
+	r.InitWindow(img.Bounds().Dx(), img.Bounds().Dy(), "Docu7")
+	r.SetTargetFPS(fps)
+	defer r.UnloadAll()
 
-	box := container.NewMax(image, circle)
-	win.SetContent(box)
-	win.Resize(fyne.NewSize(850, 500))
-	win.ShowAndRun()
+	// Load image onto the GPU
+	tex := r.LoadTextureFromGo(img)
+	windowResize()
+
+	// Game loop
+	for !r.WindowShouldClose() {
+		if r.IsWindowResized() {
+			if isHidpi && div == 1 {
+				div = 0.5
+			}
+
+			windowResize()
+		}
+
+		r.BeginDrawing()
+		r.ClearBackground(r.RayWhite)
+
+		sc := float32(height) / imh
+		wsc := float32(width) / imw
+		if wsc < sc {
+			sc = wsc
+		}
+		r.DrawTextureEx(tex, r.NewVector2((float32(width)/2-sc*imw/2)*div, (float32(height)/2-sc*imh/2)*div), 0, div*sc, r.White)
+
+		r.EndDrawing()
+	}
 }
